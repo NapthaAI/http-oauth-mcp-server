@@ -51,6 +51,12 @@ This leaves you with two options:
 
 For simplicity, we have opted for the former option using Auth0.
 
+To get started:
+1. Create an Auth0 account
+2. Create at least one connection, e.g. Google or GitHub
+3. Promote the connection to a _domain-level connection_. Since new OAuth clients are registered by each MCP client, you can't configure your IDP connections on a per-application/client basis. This means your connections need to be available for all apps in your domain. You can [learn how do this here](https://auth0.com/docs/authenticate/identity-providers/promote-connections-to-domain-level). 
+4. Enable Dynamic Client Registration (auth0 also calls this "Dynamic Application Registration"). You can [learn how to do this here](https://auth0.com/docs/get-started/applications/dynamic-client-registration)
+
 
 ## Dependencies
 [Bun](https://bun.sh), a fast all-in-one JavaScript runtime, is the recommended runtime and package manager for this repository. Limited compatibility testing has been done with `npm` + `tsc`. 
