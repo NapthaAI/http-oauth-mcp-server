@@ -1,0 +1,13 @@
+{
+	"mcpServers": {
+		"streamable": {
+			"command": "bunx",
+			"args": [
+				"mcp-remote",
+				"http://localhost:5050/mcp",
+				"--transport",
+				"http-first"
+			]
+		}
+	}
+}

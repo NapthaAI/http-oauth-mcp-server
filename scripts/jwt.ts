@@ -1,0 +1,18 @@
+import jwt from "jsonwebtoken";
+import jwksClient from "jwks-rsa";
+
+const client = jwksClient({
+	jwksUri: "https://naptha.jp.auth0.com/.well-known/jwks.json",
+	timeout: 30_000, // 30 seconds
+});
+
+const jwtToken =
+	"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InoxVmx1eHV5Wk5IUHNvbXA0WkxEVCJ9.eyJuaWNrbmFtZSI6IkstTWlzdGVsZSIsIm5hbWUiOiJLeWxlIE1pc3RlbGUiLCJwaWN0dXJlIjoiaHR0cHM6Ly9hdmF0YXJzLmdpdGh1YnVzZXJjb250ZW50LmNvbS91LzE4NDMwNTU1P3Y9NCIsInVwZGF0ZWRfYXQiOiIyMDI1LTA1LTAyVDAzOjAzOjIyLjAyOVoiLCJlbWFpbCI6Imt5bGVAbWlzdGVsZS5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9uYXB0aGEuanAuYXV0aDAuY29tLyIsImF1ZCI6IndsYkp4R25CTjRUZ015SXh4MVNwRWQySlJ0TDlmY3FwIiwic3ViIjoiZ2l0aHVifDE4NDMwNTU1IiwiaWF0IjoxNzQ2MjA2NTczLCJleHAiOjE3NDYyNDI1NzMsInNpZCI6Iks1ZmpLWEJnU1hZV1QtMW85a0RscmxERTE3WnhxT2EzIn0.MBxl6VuFZKzwfGBRep4aWyYKu1f6kY0ZT15yC2Ba66gQVzmVWF88aA4IgLwuGkakLACTlHXu49N_lZykl-1JuuDl62d5eWkJDD642D_5iiYMVuK_0ac50ZXpQOiX25PBfXwDR1a4FE7YaL87fLhUaQtF8WXBHiSXMzKkAI-JjAQzC7EuHbtXVK-NP3aW4QncLEEqKhhSulB1oTGX4Y1lvm0kJTutPsvIVjPmkU2m95UxFEg9e0xL1E87rMMX35BvTwzgbEbRNjttzGN_W9fBqJSqYGFctt-0GcH8op2n5EwfnYoQo4iEI90CtYPa3AfMhb7MwBQnsUSS0hCX4pSzPw";
+
+const tokenInfo = jwt.decode(jwtToken, { complete: true });
+console.log(tokenInfo);
+const key = await client.getSigningKey(tokenInfo?.header.kid);
+const signingKey = key.getPublicKey();
+
+const verified = jwt.verify(jwtToken, signingKey);
+console.log("verified info:", verified);

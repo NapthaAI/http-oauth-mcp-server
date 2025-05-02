@@ -40,7 +40,7 @@ As noted above, the Python MCP SDK does not support these features, so currently
 ## Deploying your own
 Once you've tested our server and you understand the limitations, we recommend deploying your own, with your own OAuth credentials!
 
-### Setting up OAuth
+### Notes on OAuth & Dynamic Client Registration
 To use this example, you need an OAuth authorization server. _Do not implement this yourself!_ For the purposes of creating our demo, we used [Auth0](https://auth0.com) -- this is a great option, though there are many others.
 
 The MCP specification requires support for an uncommon OAuth feature, specifically [RFC7591](https://datatracker.ietf.org/doc/html/rfc7591), Dynamic Client Registration. The [MCP specification](https://modelcontextprotocol.io/specification/2025-03-2026) specifies that MCP clients and servers should support the Dynamic client registration protocol, so that MCP clients (whever your client transport lives) can obtain Client IDs without user registration. This allows new clients (agents, apps, etc.) to automatically register with new servers. More details on this can be found [in the authorization section of the MCP specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization#2-4-dynamic-client-registration), but this means that unfortunately, you cannot simply proxy directly to a provider like Google or GitHub, which do not support dynamic client registration (they require you to register clients in their UI). 
@@ -49,13 +49,25 @@ This leaves you with two options:
 1. Pick an upstream OAuth provider like Auth0 which allows you to use OIDC IDPs like Google and GitHub for authentication, and which _does_ support dynamic client registration, or 
 2. implement dynamic client registration in the application yourself (i.e., the express application becomes not just a simple OAuth proxy but a complete or partially-complete OAuth server). Cloudflare implemented something like this for their Workers OAuth MCP servers, which we may extend this project with later. You can find that [here](https://github.com/cloudflare/workers-oauth-provider).
 
-For simplicity, we have opted for the former option using Auth0.
+For simplicity, we have opted for the former option using Auth0. 
 
-To get started:
-1. Create an Auth0 account
-2. Create at least one connection, e.g. Google or GitHub
+> [!NOTE]  
+> Since this implementation proxies the upstream OAuth server, the default approach of forwarding the access token from the OAuth server to the client would expose the user's upstream access token to the downstream client & MCP host. This is not suitable for many use-cases, so this approach re-implements some `@modelcontextprotocol/typescript-sdk` classes to fix this issue.
+
+
+### Setting up OAuth with Auth0
+To get started with Auth0:
+1. Create an Auth0 account at [Auth0.com](auth0.com).
+2. Create at least one connection to an IDP such as Google or GitHub. You can [learn how to do this here](https://auth0.com/docs/authenticate/identity-providers).
 3. Promote the connection to a _domain-level connection_. Since new OAuth clients are registered by each MCP client, you can't configure your IDP connections on a per-application/client basis. This means your connections need to be available for all apps in your domain. You can [learn how do this here](https://auth0.com/docs/authenticate/identity-providers/promote-connections-to-domain-level). 
-4. Enable Dynamic Client Registration (auth0 also calls this "Dynamic Application Registration"). You can [learn how to do this here](https://auth0.com/docs/get-started/applications/dynamic-client-registration)
+4. Enable Dynamic Client Registration (auth0 also calls this "Dynamic Application Registration"). You can [learn how to do this here](https://auth0.com/docs/get-started/applications/dynamic-client-registration).
+
+Once all of this has been set up, you will need the following information:
+* your Auth0 client ID
+* your Auth0 client secret
+* your Auth0 tenant domain
+
+Make sure to fill this information into your `.env`. Copy `.env.template` and then update the values with your configurations & secrets.
 
 
 ## Dependencies
