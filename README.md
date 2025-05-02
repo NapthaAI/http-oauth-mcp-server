@@ -87,7 +87,7 @@ To test out our MCP server with streamable HTTP and OAuth support, you have a co
 As noted above, the Python MCP SDK does not support these features, so currently you can either plug our remote server into an MCP host like Cursor or Claude Desktop, or into a TypeScript/JavaScript application directly - but not into a Python one.
 
 ### Plugging your server into your MCP Host (Cursor / Claude)
-Since most MCP hosts don't support either streamable HTTP (which is superior to SSE in a number of ways) _or_ OAuth, we recommend using the `mcp-remote` npm package which will handle the OAuth authorization, and briding the remote transport into a STDIO transport for your host.
+Since most MCP hosts don't support either streamable HTTP (which is superior to SSE in a number of ways) _or_ OAuth, we recommend using the `mcp-remote` npm package which will handle the OAuth authorization, and bridging the remote transport into a STDIO transport for your host.
 
 the command will look like this:
 
@@ -108,7 +108,7 @@ You have a couple of options for the `--transport` option:
 
 
 ### Plugging you server into your agent 
-You can plug your Streamable HTTP server into an agent e.g. in JavaScript using the `StreamableHttpTransportClient`. However, this will not work with OAuth-protected servers. Instead, you should use the `Authorization` header on the client side, with a valid access token on the server side. 
+You can plug your Streamable HTTP server into an agent in JS/TS using `StreamableHTTPClientTransport`. However, this will not work with OAuth-protected servers. Instead, you should use the `Authorization` header on the client side, with a valid access token on the server side. 
 
 You can implement this with client credentials, API keys or something else. That pattern is not supported in this repository, but it would look like this using the [Vercel AI SDK](https://ai-sdk.dev/cookbook/node/mcp-tools#mcp-tools):
 
@@ -117,29 +117,26 @@ import { openai } from '@ai-sdk/openai';
 import { experimental_createMCPClient as createMcpClient, generateText } from 'ai';
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-
-
 const mcpClient = await createMcpClient({
-	transport: new StreamableHTTPClientTransport(
-		new URL("http://localhost:5050/mcp"),
-		{
-			requestInit: {
-				headers: {
-					Authorization: "Bearer YOUR TOKEN HERE",
-				},
-			},
-			authProvider: undefined, // TODO add OAuth client provider if you want
-		},
-	),
+  transport: new StreamableHTTPClientTransport(
+    new URL("http://localhost:5050/mcp"), {
+      requestInit: {
+        headers: {
+          Authorization: "Bearer YOUR TOKEN HERE",
+      }, 
+    },
+    // TODO add OAuth client provider if you want
+    authProvider: undefined,
+  }),
 });
 
 const tools = await mcpClient.tools();
 await generateText({
-	model: openai("gpt-4o"),
-	prompt: "Hello, world!",
-	tools: {
-		...(await mcpClient.tools())
-	}
+  model: openai("gpt-4o"),
+  prompt: "Hello, world!",
+  tools: {
+    ...(await mcpClient.tools())
+  }
 });		
 
 ```
