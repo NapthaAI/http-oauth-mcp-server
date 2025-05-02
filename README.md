@@ -16,6 +16,12 @@ Great question! The MCP specification added the authorization specification base
 
 At [Naptha AI](https://naptha.ai), we really wanted to build an OAuth-authorized MCP server on the streamable HTTP transport, and couldn't find any reference implementations, so we decided to build one ourselves!
 
+
+## Dependencies
+[Bun](https://bun.sh), a fast all-in-one JavaScript runtime, is the recommended runtime and package manager for this repository. Limited compatibility testing has been done with `npm` + `tsc`. 
+
+
+
 ## Overview
 This repository provides the following:
 1. An MCP server, which you can easily replace with your own
@@ -27,19 +33,8 @@ Note that while this express app implements the required OAuth endpoints includi
 
 This example proxies OAuth to an upstream OAuth server which supports dynamic client registration ([RFC7591](https://datatracker.ietf.org/doc/html/rfc7591)). To use this example, you will need to bring your own authorization server. We recommend using [Auth0](https://auth0.com); see the ["Setting up OAuth" Section](https://github.com/NapthaAI/http-oauth-mcp-server?tab=readme-ov-file#setting-up-oauth) below.
 
-## Getting Started
-To test out our MCP server with streamable HTTP and OAuth support, you have a couple options.
 
-As noted above, the Python MCP SDK does not support these features, so currently you can either plug our remote server into an MCP host like cursor, or into a TypeScript/JavaScript application directly - but not into a Python one.
-
-### Plugging our server into your MCP Host (Cursor / Claude)
-
-### Plugging our server into your agent 
-
-
-## Deploying your own
-Once you've tested our server and you understand the limitations, we recommend deploying your own, with your own OAuth credentials!
-
+## Configuring your server
 ### Notes on OAuth & Dynamic Client Registration
 To use this example, you need an OAuth authorization server. _Do not implement this yourself!_ For the purposes of creating our demo, we used [Auth0](https://auth0.com) -- this is a great option, though there are many others.
 
@@ -53,6 +48,8 @@ For simplicity, we have opted for the former option using Auth0.
 
 > [!NOTE]  
 > Since this implementation proxies the upstream OAuth server, the default approach of forwarding the access token from the OAuth server to the client would expose the user's upstream access token to the downstream client & MCP host. This is not suitable for many use-cases, so this approach re-implements some `@modelcontextprotocol/typescript-sdk` classes to fix this issue.
+
+Note that while we are proxying the upstream authorization server, we are _not_ returning the end-user's auth token to the MCP client / host - instead, we are issuing our own, and allowing the client / host to use that token to authorize with our server. This prevents a malicious client or host from abusing the token, or from it being abused if it's leaked.
 
 
 ### Setting up OAuth with Auth0
@@ -69,9 +66,80 @@ Once all of this has been set up, you will need the following information:
 
 Make sure to fill this information into your `.env`. Copy `.env.template` and then update the values with your configurations & secrets.
 
-Note that while we are proxying the upstream authorization server, we are _not_ returning the end-user's auth token to the MCP client / host - instead, we are issuing our own, and allowing the client / host to use that token to authorize with our server. This prevents a malicious client or host from abusing the token, or from it being abused if it's leaked.
 
 
-## Dependencies
-[Bun](https://bun.sh), a fast all-in-one JavaScript runtime, is the recommended runtime and package manager for this repository. Limited compatibility testing has been done with `npm` + `tsc`. 
+## Running the server
+This repository includes two separate stand-alone servers: 
+- a **stateless** implementation of the streamable HTTP server at `src/app.stateless.ts`. This only supports the streamable HTTP transport, and is (theoretically) suitable for serverless deployment
+- a **stateful** implementation of both SSE and streamable HTTP at `src/app.stateful.ts`. This app offers both transports, but maintains in-memory state even when using the `redis` storage strategy (connections must be persisted in-memory), so it is not suitable for serverless deployment or trivial horizontal scaling.
 
+You can run either of them with `bun`: 
+
+```shell
+bun run src/app.stateless.ts
+# or,
+bun run src/app.stateful.ts
+```
+
+## Putting it All Together
+To test out our MCP server with streamable HTTP and OAuth support, you have a couple options.
+
+As noted above, the Python MCP SDK does not support these features, so currently you can either plug our remote server into an MCP host like Cursor or Claude Desktop, or into a TypeScript/JavaScript application directly - but not into a Python one.
+
+### Plugging your server into your MCP Host (Cursor / Claude)
+Since most MCP hosts don't support either streamable HTTP (which is superior to SSE in a number of ways) _or_ OAuth, we recommend using the `mcp-remote` npm package which will handle the OAuth authorization, and briding the remote transport into a STDIO transport for your host.
+
+the command will look like this:
+
+```shell
+bunx mcp-remote --transport http-first https://some-domain.server.com/mcp
+# or,
+npx mcp-remote --transport http-first https://some-domain.server.com/mcp
+```
+
+You have a couple of options for the `--transport` option:
+- `http-first` (default): Tries HTTP transport first, falls back to SSE if HTTP fails with a 404 error
+- `sse-first`: Tries SSE transport first, falls back to HTTP if SSE fails with a 405 error
+- `http-only`: Only uses HTTP transport, fails if the server doesn't support it
+- `sse-only`: Only uses SSE transport, fails if the server doesn't support it
+
+> [!NOTE] 
+> If you launch the _stateless_ version of the server with `src/app.stateless.ts`, the SSE transport is not available, so you should use `--transport http-only`. SSE transport should not be expected to work if you use this entrypoint.
+
+
+### Plugging you server into your agent 
+You can plug your Streamable HTTP server into an agent e.g. in JavaScript using the `StreamableHttpTransportClient`. However, this will not work with OAuth-protected servers. Instead, you should use the `Authorization` header on the client side, with a valid access token on the server side. 
+
+You can implement this with client credentials, API keys or something else. That pattern is not supported in this repository, but it would look like this using the [Vercel AI SDK](https://ai-sdk.dev/cookbook/node/mcp-tools#mcp-tools):
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { experimental_createMCPClient as createMcpClient, generateText } from 'ai';
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+
+
+const mcpClient = await createMcpClient({
+	transport: new StreamableHTTPClientTransport(
+		new URL("http://localhost:5050/mcp"),
+		{
+			requestInit: {
+				headers: {
+					Authorization: "Bearer YOUR TOKEN HERE",
+				},
+			},
+			authProvider: undefined, // TODO add OAuth client provider if you want
+		},
+	),
+});
+
+const tools = await mcpClient.tools();
+await generateText({
+	model: openai("gpt-4o"),
+	prompt: "Hello, world!",
+	tools: {
+		...(await mcpClient.tools())
+	}
+});		
+
+```
