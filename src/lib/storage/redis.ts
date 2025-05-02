@@ -7,17 +7,15 @@
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 import Redis from "ioredis";
 import createLogger from "logging";
+import { randomBytes } from "node:crypto";
 import type { OAuthProxyStorageManager } from "../types";
 
 const logger = createLogger("RedisStorage", {
 	debugFunction: (...args) => console.log(...args),
 });
-logger.debug("RedisStorage initializing...");
 
-const redis = new Redis({
-	host: "localhost",
-	port: 6379,
-});
+const redis = new Redis(process.env.REDIS_DSN ?? "redis://localhost:6379");
+
 redis.on("connecting", () => logger.debug("Redis connecting..."));
 redis.on("connect", () => logger.info("Redis connected!"));
 redis.on("error", (err) => logger.error("Redis error", err));
@@ -35,19 +33,22 @@ export const RedisStorage: OAuthProxyStorageManager = {
 		{ accessToken, idToken, refreshToken, clientId, scope },
 		expiresInSeconds: number,
 	) => {
+		const locallyIssuedAccessToken = randomBytes(64).toString("hex");
 		await redis.setex(
-			accessToken,
+			locallyIssuedAccessToken,
 			expiresInSeconds,
 			JSON.stringify({
 				idToken,
 				refreshToken,
 				clientId,
 				scopes: scope.split(" "),
+				accessToken,
 			}),
 		);
+		return locallyIssuedAccessToken;
 	},
-	getAccessToken: async (accessToken: string) => {
-		const data = await redis.get(accessToken);
+	getAccessToken: async (locallyIssuedAccessToken: string) => {
+		const data = await redis.get(locallyIssuedAccessToken);
 		return data ? JSON.parse(data) : undefined;
 	},
 };

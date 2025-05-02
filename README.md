@@ -69,6 +69,8 @@ Once all of this has been set up, you will need the following information:
 
 Make sure to fill this information into your `.env`. Copy `.env.template` and then update the values with your configurations & secrets.
 
+Note that while we are proxying the upstream authorization server, we are _not_ returning the end-user's auth token to the MCP client / host - instead, we are issuing our own, and allowing the client / host to use that token to authorize with our server. This prevents a malicious client or host from abusing the token, or from it being abused if it's leaked.
+
 
 ## Dependencies
 [Bun](https://bun.sh), a fast all-in-one JavaScript runtime, is the recommended runtime and package manager for this repository. Limited compatibility testing has been done with `npm` + `tsc`. 

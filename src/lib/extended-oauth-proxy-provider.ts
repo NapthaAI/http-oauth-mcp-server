@@ -1,5 +1,8 @@
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
-import { ServerError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
+import {
+	InvalidTokenError,
+	ServerError,
+} from "@modelcontextprotocol/sdk/server/auth/errors.js";
 
 import type { AuthorizationParams } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import {
@@ -14,7 +17,6 @@ import {
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { Response } from "express";
 import createLogger from "logging";
-import { InvalidAccessTokenError } from "./errors";
 import type { OAuthProxyStorageManager } from "./types";
 
 const logger = createLogger(__filename.split("/").pop() ?? "", {
@@ -53,15 +55,16 @@ export class ExtendedProxyOAuthServerProvider extends ProxyOAuthServerProvider {
 		super({
 			...options,
 			getClient: options.storageManager.getClient,
-			verifyAccessToken: async (accessToken: string) => {
-				logger.debug("verifyAccessToken", accessToken);
-				const data = await this.storageManager.getAccessToken(accessToken);
-				logger.debug("verifyAccessTokenData", data);
+			verifyAccessToken: async (locallyIssuedAccessToken: string) => {
+				const data = await this.storageManager.getAccessToken(
+					locallyIssuedAccessToken,
+				);
 				if (!data) {
-					throw new InvalidAccessTokenError("Invalid access token");
+					// This will return a 401 to the client, resulting in auth
+					throw new InvalidTokenError("Invalid access token");
 				}
 				return {
-					token: data.accessToken,
+					token: locallyIssuedAccessToken, // NOT the upstream IDP token.
 					scopes: data.scopes,
 					clientId: data.clientId,
 					expiresInSeconds: data.expiresInSeconds,
@@ -124,6 +127,8 @@ export class ExtendedProxyOAuthServerProvider extends ProxyOAuthServerProvider {
 			logger.debug(
 				"Exchanging authorization code with client redirect URI: ",
 				redirectUri,
+				authorizationCode,
+				codeVerifier,
 			);
 		} else {
 			logger.error(
@@ -168,7 +173,7 @@ export class ExtendedProxyOAuthServerProvider extends ProxyOAuthServerProvider {
 
 		const data = (await response.json()) as ExtendedOAuthTokens;
 		logger.debug("Saving access token", data.access_token);
-		await this.storageManager.saveAccessToken(
+		const locallyIssuedAccessToken = await this.storageManager.saveAccessToken(
 			{
 				accessToken: data.access_token,
 				idToken: data.id_token,
@@ -179,7 +184,10 @@ export class ExtendedProxyOAuthServerProvider extends ProxyOAuthServerProvider {
 			data.expires_in ?? 86400, // default to 1 day
 		);
 
-		return OAuthTokensSchema.parse(data);
+		return OAuthTokensSchema.parse({
+			...data,
+			access_token: locallyIssuedAccessToken,
+		});
 	}
 
 	public override async authorize(

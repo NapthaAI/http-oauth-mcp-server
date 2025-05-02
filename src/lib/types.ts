@@ -35,7 +35,7 @@ export type SaveAccessTokenFunction = (
 		scope: string;
 	},
 	expiresInSeconds: number,
-) => Promise<void>;
+) => Promise<string>;
 export type GetAccessTokenFunction = (accessToken: string) => Promise<
 	| {
 			scopes: Array<string>;

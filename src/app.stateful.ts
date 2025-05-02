@@ -13,7 +13,9 @@ import createLogger from "logging";
 import { randomUUID } from "node:crypto";
 import { InvalidAccessTokenError } from "./lib/errors";
 import { ExtendedProxyOAuthServerProvider } from "./lib/extended-oauth-proxy-provider";
+import InMemoryStorage from "./lib/storage/in-memory";
 import { RedisStorage } from "./lib/storage/redis";
+import type { OAuthProxyStorageManager } from "./lib/types";
 import { server } from "./mcp-server";
 config();
 
@@ -52,13 +54,26 @@ const transports: {
 	streamable: {},
 };
 
+let storageStrategy: OAuthProxyStorageManager;
+if (process.env.TOKEN_STORAGE_STRATEGY === "redis") {
+	logger.info("Using redis storage strategy!");
+	storageStrategy = RedisStorage;
+} else {
+	logger.warn(
+		"Using in-memory storage strategy. DO NOT USE THIS IN PRODUCTION!",
+	);
+	storageStrategy = InMemoryStorage;
+}
+
+process.env.TOKEN_STORAGE_STRATEGY === "memory"
+	? InMemoryStorage
+	: RedisStorage;
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-/**
- * Set up the OAuth Proxy provider; configured in .env to use Naptha's Auth0 tenant
- */
+// Set up the OAuth Proxy provider; configured in .env to use Naptha's Auth0 tenant
 const proxyProvider = new ExtendedProxyOAuthServerProvider({
 	endpoints: {
 		authorizationUrl: `${OAUTH_AUTHORIZATION_URL}`,
@@ -67,17 +82,17 @@ const proxyProvider = new ExtendedProxyOAuthServerProvider({
 		registrationUrl: `${OAUTH_REGISTRATION_URL}`,
 	},
 
-	storageManager: RedisStorage,
+	storageManager: storageStrategy, // configure with process.env.TOKEN_STORAGE_STRATEGY
 });
 
+// Set up the middleware that verifies the issued bearer tokens. Note that these are NOT
+// the auth tokens from the upstream IDP.
 const bearerAuthMiddleware = requireBearerAuth({
 	provider: proxyProvider,
 	requiredScopes: [],
 });
 
-/**
- * Mount the auth router
- */
+// Mount the router that handles the OAuth Proxy's endoints, discovery etc.
 app.use(
 	mcpAuthRouter({
 		provider: proxyProvider,
@@ -127,7 +142,7 @@ app.post("/messages", bearerAuthMiddleware, async (req, res) => {
 /**
  * Set up the streamable HTTP MCP router
  */
-app.use("/mcp", async (req, res, next) => {
+app.use("/", async (req, res, next) => {
 	logger.debug(req.method, req.url, req.headers, req.body);
 	await next();
 	logger.debug(res.headersSent, res.statusCode);
@@ -178,7 +193,7 @@ app.post("/mcp", bearerAuthMiddleware, async (req, res, next) => {
 			jsonrpc: "2.0",
 			error: {
 				code: -32_000,
-				message: "Bad request: no valid session ID provided",
+				message: "No transport found for sessionId",
 			},
 			id: null,
 		});
@@ -205,7 +220,11 @@ const handleSessionRequest = async (
 		logger.warn("Streamable", sessionId, "No transport found for sessionId");
 		res.status(400).json({
 			jsonrpc: "2.0",
-			error: {},
+			error: {
+				code: -32_000,
+				message: "No transport found for sessionId",
+			},
+			id: null,
 		});
 		return next();
 	}
@@ -225,11 +244,16 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
 					code: -32_000,
 					message: "Invalid access token",
 				},
+				id: null,
 			});
 		} else {
 			res.status(500).json({
-				code: -32_000,
-				message: "Internal server error",
+				jsonrpc: "2.0",
+				error: {
+					code: -32_000,
+					message: "Internal server error",
+				},
+				id: null,
 			});
 		}
 	} else {

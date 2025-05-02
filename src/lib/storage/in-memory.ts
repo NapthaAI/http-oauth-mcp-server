@@ -1,30 +1,19 @@
+import { randomBytes } from "node:crypto";
 /**
  * This file presents a simple in-memory storage implementation for the OAuth proxy. useful if you are locally debugging
  * or don't want to set up a database or something. don't use this in production
  */
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
-import createLogger from "logging";
-import type { OAuthProxyStorageManager } from "../types";
-
-const logger = createLogger("InMemoryStorage", {
-	debugFunction: (...args) => console.log(...args),
-});
-
-logger.warn(
-	"Warning: InMemoryStorage is not suitable for production use. Consider using RedisStorage",
-);
+import type {
+	GetAccessTokenFunction,
+	OAuthProxyStorageManager,
+} from "../types";
 
 // Local storage for the OAuth Proxy
 const clients: Record<string, OAuthClientInformationFull> = {};
 const accessTokens: Record<
 	string,
-	{
-		scopes: Array<string>;
-		clientId: string;
-		accessToken: string;
-		idToken: string;
-		expiresInSeconds: number;
-	}
+	Awaited<ReturnType<GetAccessTokenFunction>>
 > = {};
 
 export const InMemoryStorage: OAuthProxyStorageManager = {
@@ -35,26 +24,26 @@ export const InMemoryStorage: OAuthProxyStorageManager = {
 		return clients[clientId];
 	},
 	saveAccessToken: async (
-		accessToken: string,
-		idToken: string,
-		clientId: string,
-		scope: string,
+		{ accessToken, idToken, clientId, scope },
 		expiresInSeconds: number,
 	) => {
-		accessTokens[accessToken] = {
-			scopes: scope.split(" "),
+		const locallyIssuedAccessToken = randomBytes(64).toString("hex");
+
+		// save the read access token and other information under the "proxied" access token
+		accessTokens[locallyIssuedAccessToken] = {
+			scopes: scope?.split(" ") ?? [],
 			clientId,
-			accessToken,
-			idToken,
+			idToken: idToken ?? "",
+			accessToken: accessToken,
 			expiresInSeconds,
 		};
 		setTimeout(() => {
-			logger.debug("Deleting access token after expiration", accessToken);
-			delete accessTokens[accessToken];
+			delete accessTokens[locallyIssuedAccessToken];
 		}, expiresInSeconds * 1000);
+		return locallyIssuedAccessToken;
 	},
-	getAccessToken: async (accessToken: string) => {
-		return accessTokens[accessToken];
+	getAccessToken: async (locallyIssuedAccessToken: string) => {
+		return accessTokens[locallyIssuedAccessToken];
 	},
 };
 
