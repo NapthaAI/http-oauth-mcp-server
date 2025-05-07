@@ -12,7 +12,7 @@ As a result, you can easily fork this repo, and plug in your own MCP server and 
 Great question! The MCP specification added the authorization specification based on OAuth on March 25, 2025. At present, as of May 1, 2025: 
 - The Typescript SDK contains many of the building blocks for accomplishing an OAuth-authorized MCP server with streamable HTTP, **but there is no documentation or tutorial** on how to build such a server
 - The Python SDK contains neither an implementation of the streamable HTTP transport, nor an implementation of the OAuth building blocks that are present in the typescript SDK
-- The Streamable HTTP transport is broadly unsupported by MCP host applications such as Cursor and Claude desktop, though it may be intgrated directly into agents written in JavaScript using the JS/TS SDK's `StreamableHttpClientTransport` class
+- The Streamable HTTP transport is broadly unsupported by MCP host applications such as Cursor and Claude desktop, though it may be integrated directly into agents written in JavaScript using the JS/TS SDK's `StreamableHttpClientTransport` class
 
 At [Naptha AI](https://naptha.ai), we really wanted to build an OAuth-authorized MCP server on the streamable HTTP transport, and couldn't find any reference implementations, so we decided to build one ourselves!
 
@@ -54,7 +54,7 @@ Note that while we are proxying the upstream authorization server, we are _not_ 
 
 ### Setting up OAuth with Auth0
 To get started with Auth0:
-1. Create an Auth0 account at [Auth0.com](auth0.com).
+1. Create an Auth0 account at [Auth0.com](https://auth0.com/).
 2. Create at least one connection to an IDP such as Google or GitHub. You can [learn how to do this here](https://auth0.com/docs/authenticate/identity-providers).
 3. Promote the connection to a _domain-level connection_. Since new OAuth clients are registered by each MCP client, you can't configure your IDP connections on a per-application/client basis. This means your connections need to be available for all apps in your domain. You can [learn how do this here](https://auth0.com/docs/authenticate/identity-providers/promote-connections-to-domain-level). 
 4. Enable Dynamic Client Registration (auth0 also calls this "Dynamic Application Registration"). You can [learn how to do this here](https://auth0.com/docs/get-started/applications/dynamic-client-registration).
